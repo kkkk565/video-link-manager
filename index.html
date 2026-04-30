@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频链接管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; color: white; margin-bottom: 30px; }
+        .header h1 { font-size: 1.8rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .header h1::before { content: "📹"; font-size: 2rem; }
+        .card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); margin-bottom: 24px; }
+        .card-title { font-size: 1.2rem; font-weight: 600; color: #333; margin-bottom: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.85rem; color: #666; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 12px; border: 2px solid #e8e8e8; border-radius: 8px; font-size: 1rem; outline: none; transition: all 0.3s; }
+        .form-group input:focus { border-color: #667eea; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-secondary { background: #f5f5f5; color: #666; }
+        .table-container { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        th { background: #f8fafc; font-weight: 600; color: #666; }
+        tr:hover { background: #f8fafc; }
+        tr.duplicate { background: #fef2f2; }
+        .action-btn { padding: 6px 12px; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer; margin-right: 6px; }
+        .action-btn.edit { background: #667eea; color: white; }
+        .action-btn.delete { background: #ef4444; color: white; }
+        .stats-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+        .stat-item { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px 20px; border-radius: 8px; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .search-bar { margin-bottom: 16px; }
+        .search-bar input { width: 100%; padding: 10px; border: 2px solid #e8e8e8; border-radius: 8px; }
+        .filter-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .filter-row select { padding: 8px; border: 2px solid #e8e8e8; border-radius: 6px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .modal-overlay.show { opacity: 1; visibility: visible; }
+        .modal { background: white; border-radius: 16px; padding: 24px; min-width: 400px; max-width: 90%; }
+        .modal-warning { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px; margin-bottom: 16px; }
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 14px 24px; border-radius: 10px; z-index: 2000; opacity: 0; transition: all 0.3s; }
+        .toast.show { opacity: 1; }
+        .toast.success { background: #10b981; }
+        .toast.error { background: #ef4444; }
+        .online-status { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; margin-top: 10px; }
+        .online-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+        .online-status.connected .dot { background: #10b981; }
+        .info-note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; margin-top: 16px; font-size: 0.85rem; color: #92400e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>视频链接管理系统</h1>
+            <p>团队共享 · 智能查重 · 实时同步</p>
+            <div class="online-status" id="onlineStatus">
+                <span class="dot"></span>
+                <span>连接中...</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">📝 添加新记录</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>姓名 *</label>
+                    <input type="text" id="name" placeholder="请输入姓名">
+                </div>
+                <div class="form-group">
+                    <label>日期</label>
+                    <input type="date" id="date" value="">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>视频链接 *</label>
+                <input type="text" id="url" placeholder="请粘贴抖音视频链接">
+            </div>
+            <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
+            <button class="btn btn-secondary" onclick="clearForm()" style="margin-left: 10px;">清空</button>
+            <div class="info-note">💡 粘贴链接后系统自动检测重复，相似度超过80%将触发警告</div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">📊 记录统计</h2>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div>总记录</div>
+                    <div class="stat-value" id="totalCount">--</div>
+                </div>
+                <div class="stat-item">
+                    <div>成员数</div>
+                    <div class="stat-value" id="memberCount">--</div>
+                </div>
+                <div class="stat-item">
+                    <div>今日新增</div>
+                    <div class="stat-value" id="todayCount">--</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">📋 记录列表</h2>
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="搜索链接..." onkeyup="filterTable()">
+            </div>
+            <div class="filter-row">
+                <select id="nameFilter" onchange="filterTable()">
+                    <option value="">全部成员</option>
+                </select>
+                <select id="dateFilter" onchange="filterTable()">
+                    <option value="">全部日期</option>
+                </select>
+            </div>
+            <div class="table-container">
+                <table id="recordTable">
+                    <thead>
+                        <tr><th>序号</th><th>姓名</th><th>日期</th><th>链接</th><th>操作</th></tr>
+                    </thead>
+                    <tbody id="recordBody">
+                        <tr><td colspan="5" style="text-align:center;color:#999;">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <button class="btn btn-danger" style="margin-top:16px;" onclick="clearAllRecords()">清空所有记录</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="duplicateModal">
+        <div class="modal">
+            <h3>⚠️ 检测到重复链接</h3>
+            <div class="modal-warning">新链接与已有记录相似度超过80%，是否继续添加？</div>
+            <div style="margin:16px 0;"><strong>新链接:</strong><br><small id="newUrl"></small></div>
+            <div style="margin:16px 0;"><strong>重复记录:</strong><br><small id="dupUrl"></small></div>
+            <button class="btn btn-primary" onclick="confirmAdd()">继续添加</button>
+            <button class="btn btn-secondary" onclick="locateDuplicate()" style="margin-left:10px;">定位重复</button>
+            <button class="btn btn-danger" onclick="closeModal()" style="margin-left:10px;">取消</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_URL = 'https://video-link-manager-api.onrender.com/api';
+        let records = [];
+        let pendingRecord = null;
+        let duplicateInfo = null;
+
+        document.getElementById('date').value = new Date().toISOString().split('T')[0];
+
+        async function loadRecords() {
+            try {
+                const res = await axios.get(`${API_URL}/records`);
+                records = res.data;
+                renderTable();
+                updateStats();
+                populateFilters();
+                document.getElementById('onlineStatus').classList.add('connected');
+                document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '已连接';
+            } catch (error) {
+                showToast('连接服务器失败，将使用本地存储', 'error');
+                loadLocalRecords();
+            }
+        }
+
+        function loadLocalRecords() {
+            const stored = localStorage.getItem('videoLinks');
+            records = stored ? JSON.parse(stored) : [];
+            renderTable();
+            updateStats();
+            populateFilters();
+        }
+
+        function saveRecords() {
+            localStorage.setItem('videoLinks', JSON.stringify(records));
+        }
+
+        async function addRecord() {
+            const name = document.getElementById('name').value.trim();
+            const date = document.getElementById('date').value;
+            const url = document.getElementById('url').value.trim();
+
+            if (!name || !date || !url) {
+                showToast('请填写完整信息', 'error');
+                return;
+            }
+
+            const dup = findDuplicate(url);
+            if (dup) {
+                pendingRecord = { name, date, url };
+                duplicateInfo = dup;
+                document.getElementById('newUrl').textContent = url;
+                document.getElementById('dupUrl').textContent = dup.record.url;
+                document.getElementById('duplicateModal').classList.add('show');
+                return;
+            }
+
+            await saveNewRecord(name, date, url);
+        }
+
+        async function confirmAdd() {
+            if (pendingRecord) {
+                await saveNewRecord(pendingRecord.name, pendingRecord.date, pendingRecord.url);
+            }
+            closeModal();
+        }
+
+        function locateDuplicate() {
+            if (duplicateInfo) {
+                const row = document.querySelector(`tr[data-id="${duplicateInfo.record.id}"]`);
+                if (row) {
+                    row.scrollIntoView({ behavior: 'smooth' });
+                    row.style.backgroundColor = '#fef2f2';
+                    setTimeout(() => row.style.backgroundColor = '', 3000);
+                }
+            }
+            closeModal();
+            showToast('已定位到重复记录', 'success');
+        }
+
+        function closeModal() {
+            document.getElementById('duplicateModal').classList.remove('show');
+            pendingRecord = null;
+            duplicateInfo = null;
+        }
+
+        async function saveNewRecord(name, date, url) {
+            const record = { id: Date.now().toString(), name, date, url, createdAt: new Date().toISOString() };
+            
+            try {
+                await axios.post(`${API_URL}/records`, record);
+            } catch (error) {
+                console.log('使用本地存储');
+            }
+            
+            records.unshift(record);
+            saveRecords();
+            renderTable();
+            updateStats();
+            populateFilters();
+            clearForm();
+            showToast('记录已添加', 'success');
+        }
+
+        function renderTable(filtered) {
+            const tbody = document.getElementById('recordBody');
+            const data = filtered || records;
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999;">暂无记录</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map((r, i) => `
+                <tr data-id="${r.id}">
+                    <td>${i+1}</td>
+                    <td>${r.name}</td>
+                    <td>${r.date}</td>
+                    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.url}">${r.url}</td>
+                    <td>
+                        <button class="action-btn edit" onclick="editRecord('${r.id}')">编辑</button>
+                        <button class="action-btn delete" onclick="deleteRecord('${r.id}')">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function filterTable() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const name = document.getElementById('nameFilter').value;
+            const date = document.getElementById('dateFilter').value;
+            
+            const filtered = records.filter(r => {
+                const matchSearch = !search || r.url.toLowerCase().includes(search) || r.name.toLowerCase().includes(search);
+                const matchName = !name || r.name === name;
+                const matchDate = !date || r.date === date;
+                return matchSearch && matchName && matchDate;
+            });
+            
+            renderTable(filtered);
+        }
+
+        function populateFilters() {
+            const names = [...new Set(records.map(r => r.name))].sort();
+            const dates = [...new Set(records.map(r => r.date))].sort().reverse();
+            
+            const nameFilter = document.getElementById('nameFilter');
+            nameFilter.innerHTML = '<option value="">全部成员</option>' + names.map(n => `<option value="${n}">${n}</option>`).join('');
+            
+            const dateFilter = document.getElementById('dateFilter');
+            dateFilter.innerHTML = '<option value="">全部日期</option>' + dates.map(d => `<option value="${d}">${d}</option>`).join('');
+        }
+
+        function updateStats() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('totalCount').textContent = records.length;
+            document.getElementById('memberCount').textContent = [...new Set(records.map(r => r.name))].length;
+            document.getElementById('todayCount').textContent = records.filter(r => r.date === today).length;
+        }
+
+        function findDuplicate(url) {
+            for (const r of records) {
+                const sim = calculateSimilarity(url, r.url);
+                if (sim >= 80) return { record: r, similarity: sim };
+            }
+            return null;
+        }
+
+        function calculateSimilarity(s1, s2) {
+            const longer = s1.length > s2.length ? s1 : s2;
+            const shorter = s1.length > s2.length ? s2 : s1;
+            if (longer.length === 0) return 100;
+            const edits = levenshteinDistance(longer, shorter);
+            return ((longer.length - edits) / longer.length) * 100;
+        }
+
+        function levenshteinDistance(s1, s2) {
+            const costs = [];
+            for (let i = 0; i <= s1.length; i++) {
+                let lastValue = i;
+                for (let j = 0; j <= s2.length; j++) {
+                    if (i === 0) costs[j] = j;
+                    else if (j > 0) {
+                        let newValue = costs[j - 1];
+                        if (s1[i - 1] !== s2[j - 1]) newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                        costs[j - 1] = lastValue;
+                        lastValue = newValue;
+                    }
+                }
+                if (i > 0) costs[s2.length] = lastValue;
+            }
+            return costs[s2.length];
+        }
+
+        function editRecord(id) {
+            const r = records.find(x => x.id === id);
+            if (r) {
+                document.getElementById('name').value = r.name;
+                document.getElementById('date').value = r.date;
+                document.getElementById('url').value = r.url;
+            }
+        }
+
+        async function deleteRecord(id) {
+            if (!confirm('确定删除？')) return;
+            
+            try {
+                await axios.delete(`${API_URL}/records/${id}`);
+            } catch (error) {
+                console.log('使用本地存储');
+            }
+            
+            records = records.filter(r => r.id !== id);
+            saveRecords();
+            renderTable();
+            updateStats();
+            populateFilters();
+            showToast('已删除', 'success');
+        }
+
+        async function clearAllRecords() {
+            if (!confirm('确定清空所有记录？')) return;
+            
+            try {
+                await axios.delete(`${API_URL}/records`);
+            } catch (error) {
+                console.log('使用本地存储');
+            }
+            
+            records = [];
+            saveRecords();
+            renderTable();
+            updateStats();
+            populateFilters();
+            showToast('已清空', 'success');
+        }
+
+        function clearForm() {
+            document.getElementById('name').value = '';
+            document.getElementById('date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('url').value = '';
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        document.addEventListener('DOMContentLoaded', loadRecords);
+    </script>
+</body>
+</html>
