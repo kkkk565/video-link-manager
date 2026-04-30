@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频链接管理系统</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -151,41 +150,27 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        const API_URL = 'https://video-link-manager-api.onrender.com/api';
         let records = [];
         let pendingRecord = null;
         let duplicateInfo = null;
 
         document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-        async function loadRecords() {
-            try {
-                const res = await axios.get(`${API_URL}/records`);
-                records = res.data;
-                renderTable();
-                updateStats();
-                populateFilters();
-                document.getElementById('onlineStatus').classList.add('connected');
-                document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '已连接';
-            } catch (error) {
-                showToast('连接服务器失败，将使用本地存储', 'error');
-                loadLocalRecords();
-            }
-        }
-
-        function loadLocalRecords() {
+        function loadRecords() {
             const stored = localStorage.getItem('videoLinks');
             records = stored ? JSON.parse(stored) : [];
             renderTable();
             updateStats();
             populateFilters();
+            document.getElementById('onlineStatus').classList.add('connected');
+            document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '已就绪';
         }
 
         function saveRecords() {
             localStorage.setItem('videoLinks', JSON.stringify(records));
         }
 
-        async function addRecord() {
+        function addRecord() {
             const name = document.getElementById('name').value.trim();
             const date = document.getElementById('date').value;
             const url = document.getElementById('url').value.trim();
@@ -205,12 +190,12 @@
                 return;
             }
 
-            await saveNewRecord(name, date, url);
+            saveNewRecord(name, date, url);
         }
 
-        async function confirmAdd() {
+        function confirmAdd() {
             if (pendingRecord) {
-                await saveNewRecord(pendingRecord.name, pendingRecord.date, pendingRecord.url);
+                saveNewRecord(pendingRecord.name, pendingRecord.date, pendingRecord.url);
             }
             closeModal();
         }
@@ -234,14 +219,8 @@
             duplicateInfo = null;
         }
 
-        async function saveNewRecord(name, date, url) {
+        function saveNewRecord(name, date, url) {
             const record = { id: Date.now().toString(), name, date, url, createdAt: new Date().toISOString() };
-            
-            try {
-                await axios.post(`${API_URL}/records`, record);
-            } catch (error) {
-                console.log('使用本地存储');
-            }
             
             records.unshift(record);
             saveRecords();
@@ -351,14 +330,8 @@
             }
         }
 
-        async function deleteRecord(id) {
+        function deleteRecord(id) {
             if (!confirm('确定删除？')) return;
-            
-            try {
-                await axios.delete(`${API_URL}/records/${id}`);
-            } catch (error) {
-                console.log('使用本地存储');
-            }
             
             records = records.filter(r => r.id !== id);
             saveRecords();
@@ -368,14 +341,8 @@
             showToast('已删除', 'success');
         }
 
-        async function clearAllRecords() {
+        function clearAllRecords() {
             if (!confirm('确定清空所有记录？')) return;
-            
-            try {
-                await axios.delete(`${API_URL}/records`);
-            } catch (error) {
-                console.log('使用本地存储');
-            }
             
             records = [];
             saveRecords();
