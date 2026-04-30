@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频链接管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -56,6 +57,8 @@
         .online-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
         .online-status.connected .dot { background: #10b981; }
         .info-note { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; margin-top: 16px; font-size: 0.85rem; color: #92400e; }
+        .sync-btn { background: #10b981; color: white; margin-left: 10px; }
+        .sync-btn:hover { transform: translateY(-2px); }
     </style>
 </head>
 <body>
@@ -86,7 +89,7 @@
                 <input type="text" id="url" placeholder="请粘贴抖音视频链接">
             </div>
             <button class="btn btn-primary" onclick="addRecord()">添加记录</button>
-            <button class="btn btn-secondary" onclick="clearForm()" style="margin-left: 10px;">清空</button>
+            <button class="btn btn-secondary" onclick="clearForm()">清空</button>
             <div class="info-note">💡 粘贴链接后系统自动检测重复，相似度超过80%将触发警告</div>
         </div>
 
@@ -106,6 +109,7 @@
                     <div class="stat-value" id="todayCount">--</div>
                 </div>
             </div>
+            <button class="btn sync-btn" onclick="syncRecords()">🔄 同步数据</button>
         </div>
 
         <div class="card">
@@ -150,24 +154,72 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        const API_URL = 'https://api.jsonbin.io/v3/b/6630d2a6ad19ca34f86b3a5b';
+        const API_KEY = '$2b$10$EJzYF5JnL7a0r3Y5m9qZKuM7V8W6X9Q0R1T2Y3U4I5O6P7A8S9D0F1G2H3J4K5L6';
+        
         let records = [];
         let pendingRecord = null;
         let duplicateInfo = null;
 
         document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-        function loadRecords() {
-            const stored = localStorage.getItem('videoLinks');
-            records = stored ? JSON.parse(stored) : [];
+        async function loadRecords() {
+            try {
+                const response = await axios.get(API_URL, {
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                records = response.data.record || [];
+                saveLocal(records);
+                document.getElementById('onlineStatus').classList.add('connected');
+                document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '团队同步中';
+            } catch (error) {
+                console.log('使用本地存储');
+                records = loadLocal() || [];
+                document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '离线模式';
+            }
             renderTable();
             updateStats();
             populateFilters();
-            document.getElementById('onlineStatus').classList.add('connected');
-            document.getElementById('onlineStatus').querySelector('span:last-child').textContent = '已就绪';
         }
 
-        function saveRecords() {
-            localStorage.setItem('videoLinks', JSON.stringify(records));
+        function loadLocal() {
+            const stored = localStorage.getItem('videoLinks');
+            return stored ? JSON.parse(stored) : null;
+        }
+
+        function saveLocal(data) {
+            localStorage.setItem('videoLinks', JSON.stringify(data));
+        }
+
+        async function syncRecords() {
+            try {
+                const response = await axios.get(API_URL, {
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                records = response.data.record || [];
+                saveLocal(records);
+                renderTable();
+                updateStats();
+                populateFilters();
+                showToast('数据同步成功', 'success');
+            } catch (error) {
+                showToast('同步失败，使用本地数据', 'error');
+            }
+        }
+
+        async function saveToCloud() {
+            try {
+                await axios.put(API_URL, records, {
+                    headers: { 
+                        'X-Master-Key': API_KEY,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                return true;
+            } catch (error) {
+                console.log('云端保存失败');
+                return false;
+            }
         }
 
         function addRecord() {
@@ -219,11 +271,13 @@
             duplicateInfo = null;
         }
 
-        function saveNewRecord(name, date, url) {
+        async function saveNewRecord(name, date, url) {
             const record = { id: Date.now().toString(), name, date, url, createdAt: new Date().toISOString() };
             
             records.unshift(record);
-            saveRecords();
+            saveLocal(records);
+            await saveToCloud();
+            
             renderTable();
             updateStats();
             populateFilters();
@@ -330,22 +384,26 @@
             }
         }
 
-        function deleteRecord(id) {
+        async function deleteRecord(id) {
             if (!confirm('确定删除？')) return;
             
             records = records.filter(r => r.id !== id);
-            saveRecords();
+            saveLocal(records);
+            await saveToCloud();
+            
             renderTable();
             updateStats();
             populateFilters();
             showToast('已删除', 'success');
         }
 
-        function clearAllRecords() {
+        async function clearAllRecords() {
             if (!confirm('确定清空所有记录？')) return;
             
             records = [];
-            saveRecords();
+            saveLocal(records);
+            await saveToCloud();
+            
             renderTable();
             updateStats();
             populateFilters();
